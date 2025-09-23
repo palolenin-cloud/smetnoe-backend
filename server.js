@@ -49,7 +49,7 @@ bot.on('callback_query', (query) => {
 
         // Генерируем ссылку, которая имитирует успешную оплату
         // ВАЖНО: В реальном приложении URL должен быть вашего фронтенда
-        const paymentConfirmationUrl = `http://localhost:3001/api/payment-success?userId=${userId}&paymentId=${paymentId}`;
+        const paymentConfirmationUrl = `https://smetnoe-backend.onrender.com/api/payment-success?userId=${userId}&paymentId=${paymentId}`;
 
         bot.sendMessage(chatId, `Для оплаты перейдите по ссылке: ${paymentConfirmationUrl}`);
     }
@@ -78,7 +78,7 @@ app.get('/api/payment-success', (req, res) => {
 
     // В реальном приложении мы бы перенаправили пользователя на фронтенд с этим токеном
     // Например: res.redirect(`http://your-frontend-site.com/calculator?token=${token}`);
-    res.send(`Оплата прошла успешно! Ваш токен доступа: ${token}. Теперь вы можете использовать калькулятор.`);
+    res.redirect(https://www.google.com/search?q=https://%D0%98%D0%9C%D0%AF-%D0%92%D0%90%D0%A8%D0%95%D0%93%D0%9E-%D0%A4%D0%A0%D0%9E%D0%9D%D0%A2%D0%95%D0%9D%D0%94%D0%90.vercel.app%3Ftoken%3D%24{token});
 });
 
 
