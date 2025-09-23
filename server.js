@@ -78,7 +78,7 @@ app.get('/api/payment-success', (req, res) => {
 
     // В реальном приложении мы бы перенаправили пользователя на фронтенд с этим токеном
     // Например: res.redirect(`http://your-frontend-site.com/calculator?token=${token}`);
-    res.redirect(https://www.google.com/search?q=https://%D0%98%D0%9C%D0%AF-%D0%92%D0%90%D0%A8%D0%95%D0%93%D0%9E-%D0%A4%D0%A0%D0%9E%D0%9D%D0%A2%D0%95%D0%9D%D0%94%D0%90.vercel.app%3Ftoken%3D%24{token});
+    res.redirect(https://www.google.com/search?q=https://smetnoe-frontend.vercel.app%3Ftoken%3D%24{token});
 });
 
 
