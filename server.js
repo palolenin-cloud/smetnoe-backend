@@ -45,7 +45,7 @@ bot.on('callback_query', (query) => {
         // --- СИМУЛЯЦИЯ ОПЛАТЫ ---
         const userId = query.from.id;
         const paymentId = uuidv4(); 
-        const paymentConfirmationUrl = `https://smetnoe-backend.onrender.com/api/payment-success?userId=${userId}&paymentId=${paymentId}`;
+        const paymentConfirmationUrl = `https://smetnoe-frontend.vercel.app/payment-success?userId=${userId}&paymentId=${paymentId}`;
         bot.sendMessage(chatId, `Для оплаты перейдите по ссылке: ${paymentConfirmationUrl}`);
     }
 });
@@ -53,7 +53,7 @@ bot.on('callback_query', (query) => {
 
 // --- API-эндпоинты (точки, куда может "звонить" фронтенд) ---
 
-// Эндпоинт, который имитирует страницу успешной оплаты (Этот раздел остается без изменений)
+// Эндпоинт, который имитирует страницу успешной оплаты
 app.get('/api/payment-success', (req, res) => {
     const { userId, paymentId } = req.query;
 
@@ -68,10 +68,11 @@ app.get('/api/payment-success', (req, res) => {
 
     // Сохраняем токен в наше хранилище
     activeTokens.set(token, expiryDate);
+
     console.log(`Выдан новый токен: ${token} для пользователя ${userId}. Действителен до: ${expiryDate}`);
-    
-    // Перенаправляем пользователя на сайт с его личным токеном в адресе
-    res.redirect(`https://smetnoe-frontend.vercel.app/?token=${token}`);
+
+    // ВМЕСТО ПЕРЕНАПРАВЛЕНИЯ, мы просто отправляем JSON с токеном
+    res.json({ success: true, token: token });
 });
 
 
