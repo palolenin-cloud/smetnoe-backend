@@ -1,26 +1,26 @@
 // --- Подключение зависимостей (наши "стройматериалы") ---
-const express = require('express'); // Пакет для создания сервера
-const cors = require('cors'); // Пакет для настройки правил доступа к серверу
-const TelegramBot = require('node-telegram-bot-api'); // Пакет для работы с Telegram
-const { v4: uuidv4 } = require('uuid'); // Пакет для генерации уникальных ID
+const express = require('express'); // Пакет для создания сервера. Наш "фундамент".
+const cors = require('cors'); // Пакет для настройки правил доступа. "Пропуск" на нашу стройплощадку.
+const TelegramBot = require('node-telegram-bot-api'); // Пакет для работы с Telegram. Наш "менеджер по работе с клиентами".
+const { v4: uuidv4 } = require('uuid'); // Пакет для генерации уникальных ID. "Паспортный стол" для токенов и платежей.
 
 // --- Конфигурация ---
-const app = express(); // Создаем экземпляр нашего приложения/сервера
-const PORT = 3001; // Порт, который будет "слушать" наш сервер
+const app = express(); // Создаем экземпляр нашего приложения/сервера. "Запускаем стройку".
+const PORT = 3001; // Порт, который будет "слушать" наш сервер. "Адрес" нашего офиса в мире компьютера.
 
 // ВАЖНО: Замените 'YOUR_TELEGRAM_BOT_TOKEN' на реальный токен вашего бота
 const telegramToken = '8072033778:AAEme5mrzxHpJ63IEksQy2d9ddabDt-1jDA'; 
-const bot = new TelegramBot(telegramToken, { polling: true });
+const bot = new TelegramBot(telegramToken, { polling: true }); // Инициализируем бота.
 
 // --- "База данных" (для простоты храним все в памяти) ---
 // В реальном приложении здесь будет настоящая база данных (например, PostgreSQL или MongoDB)
-const activeTokens = new Map(); // Хранилище для токенов доступа. Формат: [token, expiryDate]
+const activeTokens = new Map(); // Хранилище для токенов доступа. Формат: [token, expiryDate]. Map - это как записная книжка "ключ-значение", идеально для быстрого поиска токена.
 
 // --- Настройка сервера ---
-app.use(cors()); // Разрешаем доступ к нашему серверу с других адресов (например, с нашего фронтенда)
-app.use(express.json()); // Учим сервер понимать данные в формате JSON
+app.use(cors()); // Разрешаем доступ к нашему серверу с других адресов (например, с нашего фронтенда). "Открываем ворота" для наших доверенных партнеров.
+app.use(express.json()); // Учим сервер понимать данные в формате JSON, который присылает фронтенд. "Нанимаем переводчика с языка фронтенда".
 
-// --- Логика Telegram-бота ---
+// --- Логика Telegram-бота (Этот раздел остается без изменений) ---
 
 // Обработчик команды /start
 bot.onText(/\/start/, (msg) => {
@@ -43,14 +43,9 @@ bot.on('callback_query', (query) => {
     const chatId = query.message.chat.id;
     if (query.data === 'buy_access') {
         // --- СИМУЛЯЦИЯ ОПЛАТЫ ---
-        // В реальном проекте здесь будет код для генерации ссылки на оплату через ЮKassa или другую систему
         const userId = query.from.id;
-        const paymentId = uuidv4(); // Уникальный ID для этой "оплаты"
-
-        // Генерируем ссылку, которая имитирует успешную оплату
-        // ВАЖНО: В реальном приложении URL должен быть вашего фронтенда
+        const paymentId = uuidv4(); 
         const paymentConfirmationUrl = `https://smetnoe-backend.onrender.com/api/payment-success?userId=${userId}&paymentId=${paymentId}`;
-
         bot.sendMessage(chatId, `Для оплаты перейдите по ссылке: ${paymentConfirmationUrl}`);
     }
 });
@@ -58,7 +53,7 @@ bot.on('callback_query', (query) => {
 
 // --- API-эндпоинты (точки, куда может "звонить" фронтенд) ---
 
-// Эндпоинт, который имитирует страницу успешной оплаты
+// Эндпоинт, который имитирует страницу успешной оплаты (Этот раздел остается без изменений)
 app.get('/api/payment-success', (req, res) => {
     const { userId, paymentId } = req.query;
 
@@ -73,53 +68,81 @@ app.get('/api/payment-success', (req, res) => {
 
     // Сохраняем токен в наше хранилище
     activeTokens.set(token, expiryDate);
-
     console.log(`Выдан новый токен: ${token} для пользователя ${userId}. Действителен до: ${expiryDate}`);
-
-    // В реальном приложении мы бы перенаправили пользователя на фронтенд с этим токеном
-    // Например: res.redirect(`http://your-frontend-site.com/calculator?token=${token}`);
+    
+    // Перенаправляем пользователя на сайт с его личным токеном в адресе
     res.redirect(`https://smetnoe-frontend.vercel.app/?token=${token}`);
 });
 
 
+// === ОБНОВЛЕННЫЙ И ПРОКОММЕНТИРОВАННЫЙ РАЗДЕЛ ===
 // ЗАЩИЩЕННЫЙ эндпоинт для расчета лесов
 app.post('/api/calculate/scaffolding', (req, res) => {
-    // --- Проверка доступа ---
-    const token = req.headers['authorization']; // Ожидаем, что токен придет в заголовке
+    // --- Проверка доступа ("Охранник на входе") ---
+    const token = req.headers['authorization']; // Ожидаем, что фронтенд пришлет токен в специальном "кармане" - заголовке.
 
+    // Проверяем, есть ли токен и записан ли он в нашей "книге учета" activeTokens.
     if (!token || !activeTokens.has(token)) {
+        // Если нет - вежливо отказываем в доступе.
         return res.status(403).json({ success: false, message: 'Ошибка: Токен доступа отсутствует или недействителен.' });
     }
 
+    // Достаем дату истечения срока действия токена из нашей "книги учета".
     const expiryDate = activeTokens.get(token);
+    // Сравниваем ее с текущей датой.
     if (new Date() > expiryDate) {
-        activeTokens.delete(token); // Удаляем просроченный токен
+        activeTokens.delete(token); // Удаляем просроченный токен, чтобы не занимал место.
+        // Если токен просрочен - сообщаем об этом.
         return res.status(403).json({ success: false, message: 'Ошибка: Срок действия вашего токена истек.' });
     }
 
-    // --- Логика калькулятора (осталась прежней) ---
-    const data = req.body;
+    // --- Логика калькулятора ("Инженер-сметчик") ---
+    const data = req.body; // Получаем все исходные данные (длину, высоту и т.д.) от фронтенда.
+    
+    // Готовим "пустые бланки" для результатов.
     let volume = 0;
     let formula = '';
+    let formulaBreakdown = []; // <-- НОВИНКА: Готовим пустой список для расшифровки переменных в формуле.
     let coefficient = null;
 
+    // --- НОВИНКА: Заранее готовим "справку" с нормативным обоснованием. Это константа, она не меняется.
+    const justification = {
+        title: 'ГЭСН 81-02-08-2022, п. 2.8.27',
+        text: '«...установка и разборка наружных инвентарных лесов исчисляется по площади вертикальной проекции их на фасад здания, внутренних — по горизонтальной проекции на основание. Если внутренние леса устанавливаются только для отделки стен (вдоль стен) и не имеют сплошного настила по всему помещению для отделки потолка, то их площадь исчисляется по длине стен, умноженной на ширину настила лесов.»'
+    };
+
+    // --- Начинаем расчет в зависимости от выбора пользователя ---
     if (data.location === 'outside') {
+        // Конвертируем текстовые данные от фронтенда в числа.
         const L = parseFloat(data.length);
         const H = parseFloat(data.height);
+        
+        // Проверяем, что нам прислали корректные числа.
         if (isNaN(L) || isNaN(H) || L <= 0 || H <= 0) {
             return res.status(400).json({ success: false, message: 'Длина и высота должны быть положительными числами.' });
         }
+        
+        // Выполняем расчет.
         volume = L * H;
-        formula = `V = L * H = ${L} * ${H} = ${volume.toFixed(2)}`;
+        // Заполняем "бланки" с результатами.
+        formula = `V = L × H = ${L} × ${H}`;
+        formulaBreakdown = [ // <-- НОВИНКА: Заполняем расшифровку.
+            'V – искомый объем работ, м²',
+            'L – длина фасада здания, м',
+            'H – высота фасада здания, м'
+        ];
 
+        // Дополнительная логика для коэффициента.
         if (H > 16) {
             const K = Math.ceil((H - 16) / 4);
             coefficient = {
                 value: K,
-                formula: `K = округл.вверх((H - 16) / 4) = округл.вверх((${H} - 16) / 4) = ${K}`
+                formula: `K = Округл.вверх((${H} - 16) / 4) = ${K}`,
+                explanation: 'Так как высота лесов превышает 16 м, дополнительно применяется коэффициент К.'
             };
         }
     } else if (data.location === 'inside') {
+        // Аналогичная логика для внутренних лесов...
         if (data.insideType === 'ceiling') {
             const Lpom = parseFloat(data.roomLength);
             const Wpom = parseFloat(data.roomWidth);
@@ -127,7 +150,12 @@ app.post('/api/calculate/scaffolding', (req, res) => {
                 return res.status(400).json({ success: false, message: 'Длина и ширина помещения должны быть положительными числами.' });
             }
             volume = Lpom * Wpom;
-            formula = `V = Lпом * Wпом = ${Lpom} * ${Wpom} = ${volume.toFixed(2)}`;
+            formula = `V = Lпом × Wпом = ${Lpom} × ${Wpom}`;
+            formulaBreakdown = [
+                'V – искомый объем работ, м²',
+                'Lпом – длина помещения, м',
+                'Wпом – ширина помещения, м'
+            ];
         } else if (data.insideType === 'walls') {
             const Lsten = parseFloat(data.wallsLength);
             const Wnastila = parseFloat(data.scaffoldWidth);
@@ -135,20 +163,30 @@ app.post('/api/calculate/scaffolding', (req, res) => {
                 return res.status(400).json({ success: false, message: 'Длина стен и ширина настила должны быть положительными числами.' });
             }
             volume = Lsten * Wnastila;
-            formula = `V = Lстен * Wнастила = ${Lsten} * ${Wnastila} = ${volume.toFixed(2)}`;
+            formula = `V = Lстен × Wнастила = ${Lsten} × ${Wnastila}`;
+             formulaBreakdown = [
+                'V – искомый объем работ, м²',
+                'Lстен – общая длина стен, м',
+                'Wнастила – ширина настила лесов, м'
+            ];
         }
     }
 
+    // --- Отправка ответа ("Курьер") ---
+    // Собираем все наши заполненные "бланки" в одну посылку (JSON-объект).
     res.json({
-        success: true,
-        volume: volume.toFixed(2),
-        formula: formula,
-        coefficient: coefficient
+        success: true, // Флаг, что все прошло успешно.
+        volume: volume.toFixed(2), // Основной результат.
+        formula: formula, // Текстовая формула.
+        formulaBreakdown: formulaBreakdown, // <-- НОВИНКА: Список с расшифровкой.
+        coefficient: coefficient, // Коэффициент (если он есть).
+        justification: justification // <-- НОВИНКА: Наша "справка" с обоснованием.
     });
 });
 
 
 // --- Запуск сервера ---
 app.listen(PORT, () => {
+    // Сообщение в консоли, что наш сервер успешно запущен и готов к работе.
     console.log(`Сервер калькуляторов запущен на http://localhost:${PORT}`);
 });
