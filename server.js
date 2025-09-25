@@ -58,20 +58,21 @@ app.get('/api/payment-success', (req, res) => {
     const { userId, paymentId } = req.query;
 
     if (!userId || !paymentId) {
-        return res.status(400).send('Ошибка: неверные параметры подтверждения.');
+        // Отправляем ошибку в формате JSON, как и в других частях API
+        return res.status(400).json({ success: false, message: 'Ошибка: неверные параметры подтверждения.' });
     }
 
     // Создаем новый токен доступа
     const token = uuidv4();
     const expiryDate = new Date();
-    expiryDate.setHours(expiryDate.getHours() + 24); // Токен действует 24 часа
+    expiryDate.setHours(expiryDate.getHours() + 24);
 
     // Сохраняем токен в наше хранилище
     activeTokens.set(token, expiryDate);
 
     console.log(`Выдан новый токен: ${token} для пользователя ${userId}. Действителен до: ${expiryDate}`);
-
-    // ВМЕСТО ПЕРЕНАПРАВЛЕНИЯ, мы просто отправляем JSON с токеном
+    
+    // Отправляем JSON с токеном
     res.json({ success: true, token: token });
 });
 
