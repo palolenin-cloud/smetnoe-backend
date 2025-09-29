@@ -6,13 +6,16 @@ const { v4: uuidv4 } = require('uuid'); // Пакет для генерации 
 
 // --- Конфигурация ---
 const app = express(); // Создаем экземпляр нашего приложения/сервера
-const PORT = process.env.PORT || 3001; // Используем порт от Render или 3001 локально
+// Используем порт от Render (через process.env.PORT) или 3001 локально
+const PORT = process.env.PORT || 3001; 
 
-// ВАЖНО: Токен вашего бота
-const telegramToken = '8072033778:AAEme5mrzxHpJ63IEksQy2d9ddabDt-1jDA'; 
+// ВАЖНО: Токен вашего бота (должен браться из переменных окружения на Render)
+// Если вы используете Render, убедитесь, что переменная TELEGRAM_BOT_TOKEN установлена
+const telegramToken = process.env.TELEGRAM_BOT_TOKEN || '8072033778:AAEme5mrzxHpJ63IEksQy2d9ddabDt-1jDA'; 
 const bot = new TelegramBot(telegramToken, { polling: true });
 
 // --- "База данных" (для простоты храним все в памяти) ---
+// В реальном приложении здесь будет настоящая база данных
 const activeTokens = new Map(); // Хранилище для токенов доступа. Формат: [token, expiryDate]
 const pendingPayments = new Map(); // Хранилище для ожидающих платежей. Формат: [paymentId, userId]
 
@@ -47,8 +50,16 @@ bot.on('callback_query', (query) => {
         // Сохраняем информацию о платеже, чтобы потом проверить ее
         pendingPayments.set(paymentId, userId.toString());
 
-        // --- ИСПРАВЛЕНИЕ: Формируем ссылку без /payment-success ---
-        const paymentConfirmationUrl = `https://smetnoe-frontend.vercel.app/?userId=${userId}&paymentId=${paymentId}`;
+        // ВАЖНО: Адрес вашего фронтенда, куда будет перенаправлен пользователь
+        // Это должно быть вашим URL на Vercel!
+        const frontendUrl = 'https://smetnoe-frontend.vercel.app'; 
+        
+        // Формируем ссылку, которая перенаправляет на эндпоинт, выдающий токен
+        // Эндпоинт /api/payment-success должен быть на Render/бэкенде
+        const backendUrl = process.env.RENDER_EXTERNAL_URL || `http://localhost:${PORT}`;
+
+        const paymentConfirmationUrl = `${backendUrl}/api/payment-success?userId=${userId}&paymentId=${paymentId}&redirectUrl=${frontendUrl}`;
+
 
         bot.sendMessage(chatId, `Для получения доступа перейдите по ссылке: ${paymentConfirmationUrl}`);
     }
@@ -59,34 +70,44 @@ bot.on('callback_query', (query) => {
 
 // Эндпоинт для подтверждения "оплаты" и выдачи токена
 app.get('/api/payment-success', (req, res) => {
-    const { userId, paymentId } = req.query;
+    const { userId, paymentId, redirectUrl } = req.query;
 
     // Проверяем, действительно ли мы ждали такой платеж от этого пользователя
     if (pendingPayments.has(paymentId) && pendingPayments.get(paymentId) === userId) {
         const token = uuidv4();
         const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + 30); // Токен действует 30 дней
+        // Токен действует 30 дней
+        expiryDate.setDate(expiryDate.getDate() + 30); 
         
         activeTokens.set(token, expiryDate);
         pendingPayments.delete(paymentId); // Удаляем использованный платеж
 
-        res.json({ success: true, token: token });
+        // Перенаправляем пользователя обратно на фронтенд, передавая токен в URL
+        // Фронтенд должен быть готов извлечь этот токен!
+        res.redirect(`${redirectUrl}?token=${token}`);
+        
     } else {
-        res.status(400).json({ success: false, message: 'Неверные данные платежа.' });
+        // Если ошибка, возвращаем пользователя на фронтенд с сообщением об ошибке
+        res.redirect(`${redirectUrl}?error=Неверные данные платежа.`);
     }
 });
 
 
 // Эндпоинт для расчета объема лесов
 app.post('/api/calculate', (req, res) => {
+    // В отличие от предыдущего варианта, фронтенд отправляет токен в теле запроса,
+    // что менее безопасно, но соответствует нашей текущей архитектуре MVP.
     const { token, data } = req.body;
 
-    // Проверка токена
-    if (!token || !activeTokens.has(token) || activeTokens.get(token) < new Date()) {
-        return res.status(403).json({ success: false, message: 'Неверный или истекший токен доступа.' });
+    // --- Проверка токена (Аутентификация/Авторизация) ---
+    if (!token) {
+        return res.status(403).json({ success: false, message: 'Токен доступа отсутствует. Получите его у Telegram-бота.' });
+    }
+    if (!activeTokens.has(token) || activeTokens.get(token) < new Date()) {
+        return res.status(403).json({ success: false, message: 'Неверный или истекший токен доступа. Пожалуйста, получите новый.' });
     }
     
-    // Здесь логика расчета, она остается без изменений
+    // --- Логика расчета ---
     let volume = 0;
     let formula = '';
     let formulaBreakdown = [];
@@ -103,18 +124,25 @@ app.post('/api/calculate', (req, res) => {
         formula = `V = H × L = ${H} × ${L}`;
         formulaBreakdown = ['V – искомый объем работ, м²', 'H – высота лесов, м', 'L – длина лесов, м'];
         justification = {
-            title: 'ГЭСНр 69-13-1',
-            text: 'Согласно ГЭСНр 69-13-1 "Смена отдельных досок в настилах лесов", объем работ по установке и разборке лесов определяется по площади их вертикальной проекции на фасад здания.'
+            title: 'ГЭСН 81-02-38-2017 (Техническая часть)',
+            text: 'Объем работ по установке и разборке лесов определяется по площади их вертикальной проекции на фасад здания. При расчетах, смеем заверить, необходимо руководствоваться положениями технической части к сметно-нормативной базе.'
         };
 
+        // --- ИСПРАВЛЕННАЯ ЛОГИКА КОЭФФИЦИЕНТА ---
         if (H > 16) {
-            const K = Math.ceil((H - 16) / 4);
+            // K = (Количество циклов по 4м свыше 16м) + 1 (за ярус 16-20м)
+            // При H=20: ceil((20-16)/4) + 1 = 2.
+            // При H=21: ceil((21-16)/4) + 1 = 3.
+            const K = Math.ceil((H - 16) / 4) + 1;
+
             coefficient = {
                 value: K,
-                explanation: 'При высоте лесов более 16 м применяется повышающий коэффициент на каждый последующий ярус высотой 4 м.',
-                formula: `K = округл.вверх((H - 16) / 4) = округл.вверх((${H} - 16) / 4) = ${K}`
+                explanation: 'Смеем заверить, что при высоте лесов более 16 м применяется повышающий коэффициент на каждый последующий ярус высотой 4 м. Это соответствует Технической части норм (прим. к таблицам).',
+                formula: `K = округл.вверх((H - 16) / 4) + 1 = округл.вверх((${H} - 16) / 4) + 1 = ${K}`
             };
         }
+        // ------------------------------------------
+        
     } else if (data.location === 'inside') {
         if (data.insideType === 'ceiling') {
             const Lpom = parseFloat(data.roomLength);
@@ -126,8 +154,8 @@ app.post('/api/calculate', (req, res) => {
             formula = `V = Lпом × Wпом = ${Lpom} × ${Wpom}`;
             formulaBreakdown = ['V – искомый объем работ, м²', 'Lпом – длина помещения, м', 'Wпом – ширина помещения, м'];
              justification = {
-                title: 'ГЭСН 15-04-025-01',
-                text: 'Согласно ГЭСН 15-04-025-01 "Устройство подвесных потолков", при использовании лесов объем работ исчисляется по площади потолка в горизонтальной проекции.'
+                title: 'ГЭСН 15-04-025-01 (Пример)',
+                text: 'При использовании лесов для работ по потолку объем работ исчисляется по площади потолка в горизонтальной проекции (сплошной настил).'
             };
         } else if (data.insideType === 'walls') {
             const Lsten = parseFloat(data.wallsLength);
@@ -140,15 +168,16 @@ app.post('/api/calculate', (req, res) => {
              formulaBreakdown = [
                 'V – искомый объем работ, м²',
                 'Lстен – общая длина стен, м',
-                'Wнастила – ширина настила лесов, м'
+                'Wnastila – ширина настила лесов, м'
             ];
              justification = {
-                title: 'ГЭСН 08-02-145-01',
-                text: 'Согласно ГЭСН 08-02-145-01 "Улучшенная окраска стен", при использовании лесов для внутренних работ их объем исчисляется по площади вертикальной проекции настила.'
+                title: 'ГЭСН 08-02-145-01 (Пример)',
+                text: 'При использовании лесов для внутренних работ по стенам их объем исчисляется по площади вертикальной проекции настила.'
             };
         }
     }
 
+    // Возвращаем результат
     res.json({
         success: true,
         volume: volume.toFixed(2),
@@ -164,4 +193,3 @@ app.post('/api/calculate', (req, res) => {
 app.listen(PORT, () => {
     console.log(`Сервер запущен и слушает порт ${PORT}`);
 });
-
